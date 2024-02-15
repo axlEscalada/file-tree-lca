@@ -22,7 +22,11 @@ pub fn main() !void {
     try a.addChild(d);
 
     const lca = LCA.init(allocator, root);
-    const lowest_common_parent = lca.findParent(a, b);
+    const lowest_common_parent = lca.findParent(a, b) catch |err| {
+        std.debug.print("x Something went wrong!\n", .{});
+        return err;
+    };
+
     if (lowest_common_parent) |lowest| {
         std.debug.print("Found lowest: {s}", .{lowest.path});
     }

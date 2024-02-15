@@ -4,15 +4,19 @@ const File = @import("file.zig").File;
 const SparseTable = @import("sparse_table.zig").SparseTable;
 const Allocator = std.mem.Allocator;
 
+const FileError = error{
+    FileNotFound,
+};
+
 pub const LCA = struct {
     file_to_value_map: std.StringHashMap(u8),
     value_to_file_map: std.AutoHashMap(u8, *File),
     first_encounter: std.ArrayList(u8),
     sparse_table: *SparseTable,
 
-    pub fn findParent(self: *LCA, first_file: *File, second_file: *File) ?*File {
-        var first_val = self.file_to_value_map.get(first_file.path);
-        var second_val = self.file_to_value_map.get(second_file.path).?;
+    pub fn findParent(self: *LCA, first_file: *File, second_file: *File) !?*File {
+        var first_val = try self.getFileValue(first_file);
+        var second_val = try self.getFileValue(second_file);
         if (first_val > second_val) {
             const temp = first_val;
             first_val = second_val;
@@ -23,6 +27,14 @@ pub const LCA = struct {
 
         const rs = self.sparse_table.rmq(first_encounter_first, first_encounter_second);
         return self.value_to_file_map.get(rs);
+    }
+
+    fn getFileValue(self: *LCA, file: *File) !u8 {
+        const file_value = self.file_to_value_map.get(file.path);
+        if (file_value == null) {
+            return FileError.FileNotFound;
+        }
+        return file_value.?;
     }
 
     pub fn init(allocator: Allocator, root: *File) *LCA {
@@ -93,7 +105,7 @@ test "find complex nested file tree" {
     try c.addChild(e);
     try e.addChild(f);
     const lca = LCA.init(allocator, root);
-    const lowest_common_parent = lca.findParent(d, f);
+    const lowest_common_parent = try lca.findParent(d, f);
 
     try std.testing.expectEqualStrings("a", lowest_common_parent.?.path);
 }
@@ -136,9 +148,9 @@ test "should find the common file for each find call" {
 
     const lca = LCA.init(allocator, root);
 
-    const lca_d_f = lca.findParent(d, f);
-    const lca_e_f = lca.findParent(e, f);
-    const lca_k_h = lca.findParent(k, h);
+    const lca_d_f = try lca.findParent(d, f);
+    const lca_e_f = try lca.findParent(e, f);
+    const lca_k_h = try lca.findParent(k, h);
 
     try std.testing.expectEqualStrings("a", lca_d_f.?.path);
     try std.testing.expectEqualStrings("c", lca_e_f.?.path);
@@ -159,7 +171,7 @@ test "find simple nested file tree" {
     try root.addChild(b);
 
     const lca = LCA.init(allocator, root);
-    const lowest_common_parent = lca.findParent(a, b);
+    const lowest_common_parent = try lca.findParent(a, b);
 
     try std.testing.expectEqualStrings("root", lowest_common_parent.?.path);
 }
@@ -180,7 +192,24 @@ test "when file b is child of file a, then the lowest common parent should be a"
     try root.addChild(c);
 
     const lca = LCA.init(allocator, root);
-    const lowest_common_parent = lca.findParent(a, b);
+    const lowest_common_parent = try lca.findParent(a, b);
 
     try std.testing.expectEqualStrings("a", lowest_common_parent.?.path);
+}
+
+test "when file is not in filesystem return file not found error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
+    const root = File.init(allocator, "root");
+    const a = File.init(allocator, "a");
+    const f = File.init(allocator, "f");
+
+    try root.addChild(a);
+
+    const lca = LCA.init(allocator, root);
+
+    try std.testing.expectError(error.FileNotFound, lca.findParent(a, f));
 }
