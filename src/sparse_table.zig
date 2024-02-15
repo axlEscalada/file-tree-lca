@@ -20,7 +20,11 @@ pub const SparseTable = struct {
             var i: u8 = 0;
             while (i + to - 1 < n) : (i += 1) {
                 const m = i + std.math.pow(u8, 2, j - 1);
-                sparse[i][j] = @min(input[sparse[i][j - 1]], input[sparse[m][j - 1]]);
+                if (input[sparse[i][j - 1]] < input[sparse[m][j - 1]]) {
+                    sparse[i][j] = sparse[i][j - 1];
+                } else {
+                    sparse[i][j] = sparse[m][j - 1];
+                }
             }
             to = std.math.pow(u8, 2, j + 1);
         }
@@ -50,3 +54,33 @@ pub const SparseTable = struct {
         return rangeMinimumQueue;
     }
 };
+
+test "preprocessing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
+    var arr = [_]u8{ 4, 6, 1, 5, 7, 3 };
+    const sparse_table = SparseTable.init(allocator, &arr);
+
+    var expected_first_row = [_]u8{ 0, 0, 2 };
+    var expected_second_row = [_]u8{ 1, 2, 2 };
+    var expected_third_row = [_]u8{ 2, 2, 2 };
+    var expected_fourth_row = [_]u8{ 3, 3, 170 };
+    var expected_fifth_row = [_]u8{ 4, 5, 170 };
+    var expected_sixth_row = [_]u8{ 5, 170, 170 };
+
+    var expected_sparse_table = [_][]u8{
+        &expected_first_row,
+        &expected_second_row,
+        &expected_third_row,
+        &expected_fourth_row,
+        &expected_fifth_row,
+        &expected_sixth_row,
+    };
+
+    for (&expected_sparse_table, 0..) |e, i| {
+        try std.testing.expectEqualSlices(u8, sparse_table.sparse_table[i], e);
+    }
+}
