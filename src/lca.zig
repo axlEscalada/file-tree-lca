@@ -11,7 +11,7 @@ pub const LCA = struct {
     sparse_table: *SparseTable,
 
     pub fn findParent(self: *LCA, first_file: *File, second_file: *File) ?*File {
-        var first_val = self.file_to_value_map.get(first_file.path).?;
+        var first_val = self.file_to_value_map.get(first_file.path);
         var second_val = self.file_to_value_map.get(second_file.path).?;
         if (first_val > second_val) {
             const temp = first_val;
@@ -162,4 +162,25 @@ test "find simple nested file tree" {
     const lowest_common_parent = lca.findParent(a, b);
 
     try std.testing.expectEqualStrings("root", lowest_common_parent.?.path);
+}
+
+test "when file b is child of file a, then the lowest common parent should be a" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
+    const root = File.init(allocator, "root");
+    const a = File.init(allocator, "a");
+    const b = File.init(allocator, "b");
+    const c = File.init(allocator, "c");
+
+    try root.addChild(a);
+    try a.addChild(b);
+    try root.addChild(c);
+
+    const lca = LCA.init(allocator, root);
+    const lowest_common_parent = lca.findParent(a, b);
+
+    try std.testing.expectEqualStrings("a", lowest_common_parent.?.path);
 }
